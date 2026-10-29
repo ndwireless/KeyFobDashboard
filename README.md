@@ -1,7 +1,9 @@
+
+
+https://github.com/user-attachments/assets/bcf1c541-2a84-451e-9bc7-c4256f533dc6
+
 # KeyFobDashboard
 Demo showing off the v3.8.1 scanning common keyfob frequencies and displaying them :)
-
-Jordan loves these
 
 ## Running
 
