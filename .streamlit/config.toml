@@ -1,0 +1,10 @@
+[theme]
+base = "dark"
+primaryColor = "#0066ff"
+backgroundColor = "#1e1e1e"
+secondaryBackgroundColor = "#262626"
+textColor = "#ffffff"
+
+[client]
+# Hide developer options for the demo kiosk
+toolbarMode = "viewer"

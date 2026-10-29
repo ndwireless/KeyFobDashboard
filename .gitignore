@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Design Skills
+/skills
+
+# Frontend (frontend/dist is already ignored by dist/ above)
+node_modules/
