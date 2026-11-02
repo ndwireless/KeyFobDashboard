@@ -9,6 +9,7 @@ Demo showing off the v3.8.1 scanning common keyfob frequencies and displaying th
 
 One-time setup:
 
+Install node.js from https://nodejs.org/en/download
 ```
 python3 -m pip install --user fastapi uvicorn numpy requests
 cd frontend && npm install && npm run build
