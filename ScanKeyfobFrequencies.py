@@ -3,6 +3,7 @@ import numpy as np
 
 node_mac_address = 'f4b898874967'
 gain = 23
+# Default detection threshold; the React dashboard can change it per band
 power_threshold_dBm = -75
 
 # range_MHz: where the keyfob transmits (power integrated here is compared to
@@ -26,17 +27,18 @@ def to_dBm(watts):
 
 def summarize(result, detect_ranges_MHz):
     """
-    (freqs_MHz, periodogram_dBm, detected) for one ScanResult. detected is
-    True if power integrated over any detect range in the capture is above
-    threshold.
+    (freqs_MHz, periodogram_dBm, level_dBm) for one ScanResult. level_dBm is
+    the strongest power integrated over any detect range in the capture (None
+    if the capture covers none of them); a detection is level_dBm > threshold.
     """
     freqs = result.frequencies
-    detected = False
+    level_dBm = None
     for fmin, fmax in detect_ranges_MHz:
         in_range = (freqs > fmin * 1e6) & (freqs < fmax * 1e6)
-        if in_range.any() and to_dBm(np.sum(result.data[in_range])) > power_threshold_dBm:
-            detected = True
-    return freqs / 1e6, to_dBm(result.data), detected
+        if in_range.any():
+            power = float(to_dBm(np.sum(result.data[in_range])))
+            level_dBm = power if level_dBm is None else max(level_dBm, power)
+    return freqs / 1e6, to_dBm(result.data), level_dBm
 
 
 def scan_keyfob(band_name):

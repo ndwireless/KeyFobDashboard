@@ -70,6 +70,29 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+/* Easter egg: indicator lights blinking a name in Morse code */
+.morse {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #18191c;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.morse-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3d1212;
+  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.6);
+}
+.morse.lit .morse-light {
+  background: #ff2b2b;
+  box-shadow: 0 0 8px #ff2b2b, 0 0 2px #ffb3b3 inset;
+}
+
 .subtitle {
   margin: 8px 0 0;
   font-size: 1.1rem;
@@ -164,6 +187,39 @@ h2 {
 }
 .panel.hot .count { color: var(--neon-cyan); text-shadow: 0 0 18px rgba(0, 255, 255, 0.6); }
 .count-label { font-size: 0.9rem; color: var(--muted); }
+
+/* Threshold knob; its LED ring is a level meter for the band */
+.dial {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  align-self: center;
+}
+.dial-readout { display: flex; flex-direction: column; align-items: flex-end; }
+.dial-value {
+  font-family: 'DejaVu Sans Mono', Menlo, monospace;
+  font-size: 1rem;
+  color: var(--signal-orange);
+  font-variant-numeric: tabular-nums;
+}
+.dial-label { font-size: 0.8rem; color: var(--muted); }
+.dial-knob {
+  display: block;
+  width: 100px;
+  height: 100px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.dial-knob:focus { outline: none; }
+.dial-knob:focus-visible .dial-plate { stroke: var(--neon-cyan); stroke-width: 2; }
+.dial-plate { fill: #17181b; stroke: rgba(255, 255, 255, 0.08); }
+.dial-led { fill: #3a3e46; }
+.dial-led.lit { fill: var(--electric-blue); }
+.dial-led.over { fill: var(--neon-cyan); filter: drop-shadow(0 0 3px var(--neon-cyan)); }
+.dial-scale { font-family: 'DejaVu Sans Mono', Menlo, monospace; font-size: 9px; fill: var(--muted); }
+.dial-knurl { stroke: rgba(0, 0, 0, 0.55); stroke-width: 1.5; }
+.dial-pointer { fill: var(--signal-orange); filter: drop-shadow(0 0 3px var(--signal-orange)); }
 
 /* The recessed analyzer screen holding the spectrum and waterfall */
 .screen {

@@ -10,7 +10,7 @@ import requests
 import streamlit as st
 from ScanKeyfobFrequencies import (
     ble_advertising_channels_MHz, ble_range_MHz, keyfob_bands, node_mac_address,
-    scan_keyfob, summarize_ble, sweep_ble,
+    power_threshold_dBm, scan_keyfob, summarize_ble, sweep_ble,
 )
 
 # Page configuration for wide layout
@@ -55,8 +55,9 @@ panels = {
 
 
 # --- BACKGROUND SCANNER THREAD ---
-def record_capture(state, band_name, freqs_MHz, power_dBm, detected):
+def record_capture(state, band_name, freqs_MHz, power_dBm, level_dBm):
     """Store one capture, update its peak hold, and count it if detected."""
+    detected = level_dBm is not None and level_dBm > power_threshold_dBm
     now = time.time()
     with state["lock"]:
         band_state = state["bands"][band_name]

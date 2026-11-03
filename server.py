@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ScanKeyfobFrequencies import (
     ble_advertising_channels_MHz, ble_range_MHz, keyfob_bands, node_mac_address,
-    scan_keyfob, summarize_ble, sweep_ble,
+    power_threshold_dBm, scan_keyfob, summarize_ble, sweep_ble,
 )
 
 PORT = 8000
@@ -29,6 +29,8 @@ KEYFOB_ROUNDS_PER_BLE_CAPTURE = 2
 ERROR_BACKOFF_S = [1, 2, 5, 10]
 # Spectrum plot y-axis: 8 divisions of 10 dB, like an analyzer screen
 Y_RANGE_dBm = (-120, -40)
+# Range of the threshold dials on the dashboard
+THRESHOLD_RANGE_dBm = (-100, -40)
 
 bands = [
     {
@@ -56,7 +58,10 @@ plot_ranges = {band["key"]: band["plot_range_MHz"] for band in bands}
 # so a newly opened tab can be caught up immediately.
 state = {
     "lock": threading.Lock(),
-    "bands": {band["key"]: {"count": 0, "last_detected": None, "segments": {}} for band in bands},
+    "bands": {
+        band["key"]: {"count": 0, "last_detected": None, "threshold": power_threshold_dBm, "segments": {}}
+        for band in bands
+    },
     "error": None,
 }
 clients = set()
@@ -79,7 +84,7 @@ def publish(message):
 
 
 # --- BACKGROUND SCANNER THREAD ---
-def record_capture(band_key, freqs_MHz, power_dBm, detected):
+def record_capture(band_key, freqs_MHz, power_dBm, level_dBm):
     """Count the capture if detected, keep it for new tabs, and push it to browsers."""
     fmin, fmax = plot_ranges[band_key]
     in_plot = (freqs_MHz >= fmin) & (freqs_MHz <= fmax)
@@ -93,11 +98,13 @@ def record_capture(band_key, freqs_MHz, power_dBm, detected):
         "f_start": float(freqs_MHz[in_plot][0]),
         "f_stop": float(freqs_MHz[in_plot][-1]),
         "power": np.round(power_dBm[in_plot], 1).tolist(),
-        "detected": detected,
+        "level": None if level_dBm is None else round(level_dBm, 1),
         "time": time.time(),
     }
     with state["lock"]:
         band_state = state["bands"][band_key]
+        detected = level_dBm is not None and level_dBm > band_state["threshold"]
+        message["detected"] = detected
         if detected:
             band_state["count"] += 1
             band_state["last_detected"] = message["time"]
@@ -162,11 +169,13 @@ async def websocket_endpoint(ws: WebSocket):
             "type": "init",
             "node": node_mac_address,
             "y_range_dBm": Y_RANGE_dBm,
+            "threshold_range_dBm": THRESHOLD_RANGE_dBm,
             "bands": bands,
             "state": {
                 key: {
                     "count": b["count"],
                     "last_detected": b["last_detected"],
+                    "threshold": b["threshold"],
                     "segments": list(b["segments"].values()),
                 } for key, b in state["bands"].items()
             },
@@ -176,8 +185,17 @@ async def websocket_endpoint(ws: WebSocket):
     clients.add(ws)
     try:
         while True:
-            await ws.receive_text()  # nothing is sent from the browser; this waits for disconnect
+            # The only message from the browser: {"type": "threshold", "band", "value"}
+            message = await ws.receive_json()
+            if message.get("type") == "threshold" and message.get("band") in state["bands"]:
+                low, high = THRESHOLD_RANGE_dBm
+                value = min(high, max(low, float(message["value"])))
+                with state["lock"]:
+                    state["bands"][message["band"]]["threshold"] = value
+                await broadcast({"type": "threshold", "band": message["band"], "value": value})
     except WebSocketDisconnect:
+        pass
+    finally:
         clients.discard(ws)
 
 

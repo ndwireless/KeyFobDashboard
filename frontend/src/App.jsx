@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Antenna from './Antenna.jsx'
+import Dial from './Dial.jsx'
+import MorseLights from './MorseLights.jsx'
 import Spectrum from './Spectrum.jsx'
 import Waterfall from './Waterfall.jsx'
 import { useScanner } from './useScanner'
@@ -7,7 +9,7 @@ import { useScanner } from './useScanner'
 const DETECTION_GLOW_S = 2 // how long a panel stays lit after a detection
 
 export default function App() {
-  const { config, bands, error, connected, spectra } = useScanner()
+  const { config, bands, thresholds, setThreshold, error, connected, spectra } = useScanner()
 
   // Re-render a few times a second so "Last seen" and the glow time out
   const [now, setNow] = useState(Date.now() / 1000)
@@ -29,6 +31,7 @@ export default function App() {
           <h1>RF Periodogram Telemetry Showcase</h1>
           <p className="subtitle">Real-time frequency spectrum analysis per wireless protocol.</p>
         </div>
+        <MorseLights />
       </header>
       {status}
       {config && (
@@ -41,6 +44,9 @@ export default function App() {
               now={now}
               spectra={spectra}
               yRange={config.y_range_dBm}
+              threshold={thresholds[band.key]}
+              thresholdRange={config.threshold_range_dBm}
+              onThresholdChange={(value) => setThreshold(band.key, value)}
             />
           ))}
         </div>
@@ -49,7 +55,7 @@ export default function App() {
   )
 }
 
-function Panel({ band, info, now, spectra, yRange }) {
+function Panel({ band, info, now, spectra, yRange, threshold, thresholdRange, onThresholdChange }) {
   const last = info?.lastDetected
   const active = last != null && now - last < DETECTION_GLOW_S
 
@@ -77,6 +83,13 @@ function Panel({ band, info, now, spectra, yRange }) {
       <div className="count-row">
         <span className="count">{count}</span>
         <span className="count-label">Times Detected</span>
+        <Dial
+          label={`${band.title} detection threshold`}
+          value={threshold}
+          level={info?.level}
+          range={thresholdRange}
+          onChange={onThresholdChange}
+        />
       </div>
       <div className="screen">
         <Spectrum band={band} spectra={spectra} yRange={yRange} active={active} />

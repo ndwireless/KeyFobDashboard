@@ -25,6 +25,8 @@ python3 server.py
 
 and open http://localhost:8000.
 
+Each panel's knob sets that band's detection threshold (drag up/down, scroll, or arrow keys). It's shared by every open tab and resets to −75 dBm when the server restarts.
+
 ## Working on the frontend
 
 Run `python3 server.py` and, in another terminal, `cd frontend && npm run dev`, then open http://localhost:5173. Changes to `frontend/src` show up immediately. Run `npm run build` when done so `server.py` serves the new version.
