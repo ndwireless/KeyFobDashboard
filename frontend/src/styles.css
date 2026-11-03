@@ -70,29 +70,6 @@ h1 {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-/* Easter egg: indicator lights blinking a name in Morse code */
-.morse {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-  align-self: flex-start;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: #18191c;
-  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-.morse-light {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #3d1212;
-  box-shadow: inset 0 -1px 2px rgba(0, 0, 0, 0.6);
-}
-.morse.lit .morse-light {
-  background: #ff2b2b;
-  box-shadow: 0 0 8px #ff2b2b, 0 0 2px #ffb3b3 inset;
-}
-
 .subtitle {
   margin: 8px 0 0;
   font-size: 1.1rem;
@@ -236,6 +213,23 @@ h2 {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 0;
 }
+
+/* Vent slots under the screen (their pattern spells a name in Morse, see VentSlots.jsx) */
+.vents {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.vent-letter { display: flex; gap: 5px; }
+.vent {
+  height: 5px;
+  border-radius: 3px;
+  background: #151618;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.vent.dot { width: 8px; }
+.vent.dash { width: 24px; }
 
 /* Antenna standing on the panel's top edge; its mount overlaps the edge */
 .antenna {

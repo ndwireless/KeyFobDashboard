@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Antenna from './Antenna.jsx'
 import Dial from './Dial.jsx'
-import MorseLights from './MorseLights.jsx'
 import Spectrum from './Spectrum.jsx'
+import VentSlots from './VentSlots.jsx'
 import Waterfall from './Waterfall.jsx'
 import { useScanner } from './useScanner'
 
@@ -31,7 +31,6 @@ export default function App() {
           <h1>RF Periodogram Telemetry Showcase</h1>
           <p className="subtitle">Real-time frequency spectrum analysis per wireless protocol.</p>
         </div>
-        <MorseLights />
       </header>
       {status}
       {config && (
@@ -95,6 +94,7 @@ function Panel({ band, info, now, spectra, yRange, threshold, thresholdRange, on
         <Spectrum band={band} spectra={spectra} yRange={yRange} active={active} />
         <Waterfall band={band} spectra={spectra} />
       </div>
+      <VentSlots />
     </section>
   )
 }
