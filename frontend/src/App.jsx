@@ -37,7 +37,7 @@ export default function App() {
       <header className="page-header">
         <img src="/resources/generalWhite-clear.png" alt="RadioHound" className="logo" />
         <div>
-          <h1>RF Periodogram Telemetry Showcase</h1>
+          <h1>RF KeyFob Frequency Detector</h1>
           <p className="subtitle">Real-time frequency spectrum analysis per wireless protocol.</p>
         </div>
       </header>
