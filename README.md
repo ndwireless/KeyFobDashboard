@@ -39,4 +39,3 @@ Run `python3 server.py` and, in another terminal, `cd frontend && npm run dev`, 
 - `ScanKeyfobFrequencies.py`: which bands to scan and how detection works
 - `spec0.py`: copy of the RadioHound module (`scan`, `sweep_beta`); don't edit here
 - `frontend/`: the React dashboard
-- `KeyFobDashboard.py`: the previous Streamlit version, kept until the React one has been through a demo

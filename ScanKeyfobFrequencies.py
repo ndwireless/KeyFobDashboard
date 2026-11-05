@@ -42,13 +42,13 @@ def summarize(result, detect_ranges_MHz):
     return freqs / 1e6, to_dBm(result.data), level_dBm
 
 
-def scan_keyfob(band_name, mac_address=node_mac_address):
+def scan_keyfob(band_name, mac_address):
     fmin, fmax = keyfob_bands[band_name]["range_MHz"]
     result = scan(mac_address, freq=(fmin + fmax) / 2 * 1e6, gain=gain)
     return summarize(result, [(fmin, fmax)])
 
 
-def sweep_ble(mac_address=node_mac_address):
+def sweep_ble(mac_address):
     """
     sweep_beta over the BLE band with doBlock=False, so each 24 MHz capture
     can be shown (and keyfob scans slotted in) as soon as it arrives.
