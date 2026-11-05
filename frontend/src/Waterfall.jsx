@@ -100,16 +100,16 @@ function maxIntoColumns(columns, segment, fmin, fmax) {
   }
 }
 
-// Signal strength -> color: dark screen, dim sensor color, sensor color, its
-// bright variant, white for the strongest. Cached per color.
+// Signal strength -> color: dark screen, then the sensor's dim, base and
+// bright shades, white for the strongest. Cached per color.
 const luts = new Map()
-function colorLUT({ base, bright }) {
-  const id = base + bright
+function colorLUT({ base, bright, dim }) {
+  const id = base + bright + dim
   if (!luts.has(id)) {
     const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
     const stops = [
       [0, [12, 14, 17]],
-      [0.35, rgb(base).map((v) => Math.round(v * 0.41))],
+      [0.35, rgb(dim)],
       [0.6, rgb(base)],
       [0.85, rgb(bright)],
       [1, [255, 255, 255]],
