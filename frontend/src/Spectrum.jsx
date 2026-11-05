@@ -1,16 +1,24 @@
 import { useEffect, useRef } from 'react'
 import { AFTERGLOW_S } from './useScanner'
-import { ELECTRIC_BLUE, MONO_FONT, MUTED, NEON_CYAN, PLOT_PAD, WHITE, fitCanvas, withAlpha } from './theme'
+import { MONO_FONT, MUTED, PLOT_PAD, WHITE, fitCanvas, withAlpha } from './theme'
 
 const X_DIVS = 10
 const Y_DIVS = 8
+const SECONDARY_ALPHA = 0.45 // non-primary sensors' traces, so the primary stands out
+const SECONDARY_STALE_S = 10 // hide a non-primary trace this long after its last capture (sensor offline)
 
-/** Analyzer-style spectrum screen: graticule, glowing live trace, afterglow, peak hold. */
-export default function Spectrum({ band, spectrumKey, spectra, yRange, active }) {
+/**
+ * Analyzer-style spectrum screen with one trace per sensor. traces is
+ * [{key, color: {base, bright}}] with the primary sensor last: it's drawn on
+ * top with glow, afterglow and peak hold; the others are thin and dimmer.
+ */
+export default function Spectrum({ band, traces, spectra, yRange, active }) {
   const canvasRef = useRef(null)
-  // Read inside the draw loop, so a detection doesn't restart the loop
+  // Read inside the draw loop, so a detection or primary change doesn't restart the loop
   const activeRef = useRef(active)
   activeRef.current = active
+  const tracesRef = useRef(traces)
+  tracesRef.current = traces
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -33,7 +41,6 @@ export default function Spectrum({ band, spectrumKey, spectra, yRange, active })
       }
       const fx = (f) => plot.x + ((f - fmin) / (fmax - fmin)) * plot.w
       const py = (p) => plot.y + ((ymax - Math.min(ymax, Math.max(ymin, p))) / (ymax - ymin)) * plot.h
-      const color = activeRef.current ? NEON_CYAN : ELECTRIC_BLUE
 
       drawGraticule(ctx, plot)
 
@@ -43,21 +50,32 @@ export default function Spectrum({ band, spectrumKey, spectra, yRange, active })
         ctx.fillRect(fx(lo), plot.y, fx(hi) - fx(lo), plot.h)
       }
 
-      const spectrum = spectra.current.get(spectrumKey)
-      if (spectrum) {
-        ctx.save()
-        ctx.beginPath()
-        ctx.rect(plot.x, plot.y, plot.w, plot.h)
-        ctx.clip()
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(plot.x, plot.y, plot.w, plot.h)
+      ctx.clip()
+      const now = Date.now() / 1000
+      const all = tracesRef.current
+      all.forEach((trace, i) => {
+        const spectrum = spectra.current.get(trace.key)
+        if (!spectrum) return
+        if (i < all.length - 1) {
+          ctx.lineWidth = 1
+          ctx.strokeStyle = withAlpha(trace.color.base, SECONDARY_ALPHA)
+          for (const segment of spectrum.segments.values()) {
+            if (now - segment.time < SECONDARY_STALE_S) strokeTrace(ctx, segment, segment.power, fx, py)
+          }
+          return
+        }
+        const color = activeRef.current ? trace.color.bright : trace.color.base
 
         // Afterglow: recent traces fading out, like phosphor on an old analyzer
-        const now = Date.now() / 1000
         ctx.lineWidth = 1
-        for (const trace of spectrum.afterglow.slice(0, -1)) {
-          const fade = 1 - (now - trace.time) / AFTERGLOW_S
+        for (const old of spectrum.afterglow.slice(0, -1)) {
+          const fade = 1 - (now - old.time) / AFTERGLOW_S
           if (fade <= 0) continue
           ctx.strokeStyle = withAlpha(color, 0.3 * fade)
-          strokeTrace(ctx, trace, trace.power, fx, py)
+          strokeTrace(ctx, old, old.power, fx, py)
         }
 
         // Peak hold
@@ -72,8 +90,9 @@ export default function Spectrum({ band, spectrumKey, spectra, yRange, active })
         ctx.shadowColor = color
         ctx.shadowBlur = 8
         for (const segment of spectrum.segments.values()) strokeTrace(ctx, segment, segment.power, fx, py)
-        ctx.restore()
-      }
+        ctx.shadowBlur = 0
+      })
+      ctx.restore()
 
       // Readouts, placed like an analyzer's: reference level and scale on top,
       // center frequency and span below
@@ -95,7 +114,7 @@ export default function Spectrum({ band, spectrumKey, spectra, yRange, active })
 
     draw()
     return () => cancelAnimationFrame(frame)
-  }, [band, spectrumKey, spectra, yRange])
+  }, [band, spectra, yRange])
 
   return <canvas ref={canvasRef} className="spectrum" />
 }

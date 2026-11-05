@@ -27,7 +27,7 @@ and open http://localhost:8000.
 
 Each panel's knob sets that band's detection threshold (drag up/down, scroll, or arrow keys). It's shared by every open tab and resets to −75 dBm when the server restarts.
 
-To watch other sensors, type a node's MAC address into the bar under the title and click "Add sensor". Up to 2 sensors are on screen at once; click a sensor to show or hide it. Only sensors on screen are scanned. Added sensors are kept in the server's memory only, so each restart begins with just the default node (`node_mac_address` in `ScanKeyfobFrequencies.py`).
+To scan with more sensors, type a node's MAC address into the bar under the title and click "Add sensor" (up to 4). Every sensor scans at once and draws its own colored trace on each radio; a detection from any of them lights the panel and adds to the count (detections within 1 s of each other count once). Click a sensor to make it the primary: its trace is the bright one, the waterfall shows it, and the knobs set its thresholds. Added sensors are kept in the server's memory only, so each restart begins with just the default node (`node_mac_address` in `ScanKeyfobFrequencies.py`).
 
 ## Working on the frontend
 

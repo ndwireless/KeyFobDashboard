@@ -95,7 +95,8 @@ h1 {
 .status.error { color: var(--error); }
 .status.error::before { background: var(--error); }
 
-/* Sensor selector: toggles for which nodes are on screen, plus an add field */
+/* Sensor selector: one chip per sensor in its trace color (--node-color, set
+   inline); the primary is filled. Plus an add field. */
 .node-bar { margin-top: 28px; }
 .node-list {
   display: flex;
@@ -111,7 +112,10 @@ h1 {
   background: var(--surface);
   transition: border-color 0.2s, background 0.2s;
 }
-.node-chip.on { border-color: var(--electric-blue); background: rgba(0, 102, 255, 0.14); }
+.node-chip.on {
+  border-color: var(--node-color);
+  background: color-mix(in srgb, var(--node-color) 16%, transparent);
+}
 .node-toggle,
 .node-remove,
 .node-add button,
@@ -141,13 +145,23 @@ h1 {
 }
 .node-remove:hover { color: var(--white); }
 .node-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #55585e;
+  background: var(--node-color);
 }
-.node-dot.live { background: var(--electric-blue); box-shadow: 0 0 8px var(--electric-blue); }
-.node-dot.error { background: var(--error); }
+.node-chip.on .node-dot { box-shadow: 0 0 8px var(--node-color); }
+/* Unreachable: red ring around the sensor's color */
+.node-chip .node-dot.error { box-shadow: 0 0 0 2px var(--error); }
+.node-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--node-color);
+  color: var(--dark-gray);
+  font-family: 'DejaVu Sans', Verdana, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
 .node-add { display: flex; gap: 8px; }
 .node-add input {
   width: 180px;
@@ -171,14 +185,13 @@ h1 {
   font-weight: 700;
   cursor: pointer;
 }
-.node-add button:disabled { opacity: 0.45; cursor: default; }
+.node-add button:disabled,
+.node-add input:disabled { opacity: 0.45; cursor: default; }
 .node-toggle:focus-visible,
 .node-remove:focus-visible,
 .node-add button:focus-visible { outline: 2px solid var(--neon-cyan); outline-offset: 2px; }
 .node-hint { margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
 .node-hint.error { color: var(--error); }
-
-.node-row + .node-row { margin-top: 56px; }
 
 .panels {
   display: grid;

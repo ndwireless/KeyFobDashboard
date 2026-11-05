@@ -1,13 +1,15 @@
 """
 Backend for the React dashboard in frontend/. Runs a scanner thread for each
-node shown on the dashboard, pushes every capture to connected browsers over
-a WebSocket at /ws, and serves the built frontend (frontend/dist) at /.
+node (up to MAX_NODES, all drawn on the same three radios), pushes every
+capture to connected browsers over a WebSocket at /ws, and serves the built
+frontend (frontend/dist) at /.
 
     python3 server.py    # then open http://localhost:8000
 
 Nodes added from the dashboard are kept in memory only: every server start
-begins with just the default node. Only shown nodes (MAX_SHOWN_NODES) are
-scanned; a hidden node's counts pause until it's shown again.
+begins with just the default node. The primary node is the one whose
+threshold the knobs set and whose spectrum fills the waterfall; a detection
+from any node lights the panel and counts.
 """
 import asyncio
 import re
@@ -37,8 +39,11 @@ ERROR_BACKOFF_S = [1, 2, 5, 10]
 Y_RANGE_dBm = (-120, -40)
 # Range of the threshold dials on the dashboard
 THRESHOLD_RANGE_dBm = (-100, -40)
-# Rows of panels on the dashboard; showing another node hides the oldest shown one
-MAX_SHOWN_NODES = 2
+# Nodes scanned at once; each gets one of this many colors on the dashboard
+MAX_NODES = 4
+# Detections from any node within this long of a counted one don't count again,
+# so one press heard by every node counts about once
+MERGE_S = 1.0
 
 bands = [
     {
@@ -65,11 +70,13 @@ plot_ranges = {band["key"]: band["plot_range_MHz"] for band in bands}
 # nodes: MAC -> that node's state, in the order they were added. Per band,
 # segments keeps the latest capture message per segment (BLE has one per 24 MHz
 # sweep step), so a newly opened tab can be caught up immediately.
-# shown: MACs on screen, oldest first. stop_events: MAC -> Event that stops its scanner.
+# bands: count and detection times shared by all nodes.
+# stop_events: MAC -> Event that stops its scanner.
 state = {
     "lock": threading.Lock(),
     "nodes": {},
-    "shown": [],
+    "bands": {band["key"]: {"count": 0, "last_detected": None, "last_counted": None} for band in bands},
+    "primary": node_mac_address,
 }
 stop_events = {}
 clients = set()
@@ -77,9 +84,12 @@ event_loop = None
 
 
 def new_node_state():
+    """Call with the lock held: takes the lowest color slot no other node uses."""
+    used = {node["color"] for node in state["nodes"].values()}
     return {
+        "color": min(set(range(MAX_NODES)) - used),
         "bands": {
-            band["key"]: {"count": 0, "last_detected": None, "threshold": power_threshold_dBm, "segments": {}}
+            band["key"]: {"level": None, "threshold": power_threshold_dBm, "segments": {}}
             for band in bands
         },
         "error": None,
@@ -91,11 +101,11 @@ def node_snapshot(mac):
     node = state["nodes"][mac]
     return {
         "mac": mac,
+        "color": node["color"],
         "error": node["error"],
         "bands": {
             key: {
-                "count": b["count"],
-                "last_detected": b["last_detected"],
+                "level": b["level"],
                 "threshold": b["threshold"],
                 "segments": list(b["segments"].values()),
             } for key, b in node["bands"].items()
@@ -141,15 +151,20 @@ def record_capture(mac, band_key, freqs_MHz, power_dBm, level_dBm):
         node = state["nodes"].get(mac)
         if node is None:  # removed while this scan was running
             return
-        band_state = node["bands"][band_key]
-        detected = level_dBm is not None and level_dBm > band_state["threshold"]
+        node_band = node["bands"][band_key]
+        shared = state["bands"][band_key]
+        detected = level_dBm is not None and level_dBm > node_band["threshold"]
         message["detected"] = detected
         if detected:
-            band_state["count"] += 1
-            band_state["last_detected"] = message["time"]
-        message["count"] = band_state["count"]
-        message["last_detected"] = band_state["last_detected"]
-        band_state["segments"][message["segment"]] = message
+            shared["last_detected"] = message["time"]
+            if shared["last_counted"] is None or message["time"] - shared["last_counted"] >= MERGE_S:
+                shared["count"] += 1
+                shared["last_counted"] = message["time"]
+        if level_dBm is not None:
+            node_band["level"] = message["level"]
+        message["count"] = shared["count"]
+        message["last_detected"] = shared["last_detected"]
+        node_band["segments"][message["segment"]] = message
         error_cleared = node["error"] is not None
         node["error"] = None
     if error_cleared:
@@ -207,23 +222,6 @@ def stop_scanning(mac):
         stop.set()
 
 
-def show_node(mac):
-    """Put a node on screen and start scanning it, hiding the oldest if full. Call with the lock held."""
-    if mac in state["shown"]:
-        return
-    state["shown"].append(mac)
-    start_scanning(mac)
-    while len(state["shown"]) > MAX_SHOWN_NODES:
-        stop_scanning(state["shown"].pop(0))
-
-
-def hide_node(mac):
-    """Call with the lock held."""
-    if mac in state["shown"]:
-        state["shown"].remove(mac)
-        stop_scanning(mac)
-
-
 def normalize_mac(text):
     """'F4:B8:98:87:49:67' -> 'f4b898874967', or None if it isn't a MAC address."""
     mac = re.sub(r"[\s:.-]", "", str(text)).lower()
@@ -238,6 +236,8 @@ async def add_node(raw_mac):
     with state["lock"]:
         if mac in state["nodes"]:
             return f"Sensor {mac} is already added."
+        if len(state["nodes"]) >= MAX_NODES:
+            return f"Up to {MAX_NODES} sensors. Remove one to add another."
     try:
         online = await asyncio.to_thread(is_online, mac)
     except Exception:
@@ -247,9 +247,11 @@ async def add_node(raw_mac):
     with state["lock"]:
         if mac in state["nodes"]:  # added by another tab meanwhile
             return None
+        if len(state["nodes"]) >= MAX_NODES:
+            return f"Up to {MAX_NODES} sensors. Remove one to add another."
         state["nodes"][mac] = new_node_state()
-        show_node(mac)
-        message = {"type": "node_added", "node": node_snapshot(mac), "shown": list(state["shown"])}
+        start_scanning(mac)
+        message = {"type": "node_added", "node": node_snapshot(mac)}
     await broadcast(message)
     return None
 
@@ -261,7 +263,7 @@ async def lifespan(app):
     event_loop = asyncio.get_running_loop()
     with state["lock"]:
         state["nodes"][node_mac_address] = new_node_state()
-        show_node(node_mac_address)
+        start_scanning(node_mac_address)
     yield
 
 
@@ -275,18 +277,21 @@ async def websocket_endpoint(ws: WebSocket):
         init = {
             "type": "init",
             "default_node": node_mac_address,
-            "max_shown_nodes": MAX_SHOWN_NODES,
+            "max_nodes": MAX_NODES,
             "y_range_dBm": Y_RANGE_dBm,
             "threshold_range_dBm": THRESHOLD_RANGE_dBm,
             "bands": bands,
             "nodes": [node_snapshot(mac) for mac in state["nodes"]],
-            "shown": list(state["shown"]),
+            "primary": state["primary"],
+            "band_state": {
+                key: {"count": b["count"], "last_detected": b["last_detected"]} for key, b in state["bands"].items()
+            },
         }
     await ws.send_json(init)
     clients.add(ws)
     try:
         while True:
-            # From the browser: threshold, show, hide, add, remove (see useScanner.js)
+            # From the browser: threshold, primary, add, remove (see useScanner.js)
             message = await ws.receive_json()
             kind = message.get("type")
             mac = message.get("node")
@@ -303,16 +308,15 @@ async def websocket_endpoint(ws: WebSocket):
                     value = min(high, max(low, float(message["value"])))
                     state["nodes"][mac]["bands"][message["band"]]["threshold"] = value
                     reply = {"type": "threshold", "node": mac, "band": message["band"], "value": value}
-                elif kind == "show":
-                    show_node(mac)
-                    reply = {"type": "shown", "shown": list(state["shown"])}
-                elif kind == "hide":
-                    hide_node(mac)
-                    reply = {"type": "shown", "shown": list(state["shown"])}
+                elif kind == "primary":
+                    state["primary"] = mac
+                    reply = {"type": "primary", "node": mac}
                 elif kind == "remove" and mac != node_mac_address:
-                    hide_node(mac)
+                    stop_scanning(mac)
                     del state["nodes"][mac]
-                    reply = {"type": "node_removed", "node": mac, "shown": list(state["shown"])}
+                    if state["primary"] == mac:
+                        state["primary"] = node_mac_address
+                    reply = {"type": "node_removed", "node": mac, "primary": state["primary"]}
                 else:
                     continue
             await broadcast(reply)

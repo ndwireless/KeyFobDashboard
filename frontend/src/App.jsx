@@ -5,13 +5,14 @@ import NodeSelector from './NodeSelector.jsx'
 import Spectrum from './Spectrum.jsx'
 import VentSlots from './VentSlots.jsx'
 import Waterfall from './Waterfall.jsx'
+import { NODE_COLORS } from './theme'
 import { spectrumKey, useScanner } from './useScanner'
 
 const DETECTION_GLOW_S = 2 // how long a panel stays lit after a detection
 
 export default function App() {
   const scanner = useScanner()
-  const { config, nodes, nodeOrder, shown, connected } = scanner
+  const { config, nodes, nodeOrder, bands, primary, connected } = scanner
 
   // Re-render a few times a second so "Last seen" and the glow time out
   const [now, setNow] = useState(Date.now() / 1000)
@@ -19,6 +20,17 @@ export default function App() {
     const timer = setInterval(() => setNow(Date.now() / 1000), 250)
     return () => clearInterval(timer)
   }, [])
+
+  const primaryNode = nodes[primary]
+  const offline = nodeOrder.filter((mac) => nodes[mac]?.error)
+  let status
+  if (!connected) status = <p className="status">Connecting to server...</p>
+  else if (offline.length > 0) {
+    status = offline.map((mac) => <p key={mac} className="status error">{nodes[mac].error}</p>)
+  } else {
+    const n = nodeOrder.length
+    status = <p className="status live">Live from {n === 1 ? `sensor ${nodeOrder[0]}` : `${n} sensors`}</p>
+  }
 
   return (
     <main>
@@ -29,59 +41,58 @@ export default function App() {
           <p className="subtitle">Real-time frequency spectrum analysis per wireless protocol.</p>
         </div>
       </header>
-      {!connected && <p className="status">Connecting to server...</p>}
       {config && (
-        <>
-          <NodeSelector
-            nodes={nodes}
-            nodeOrder={nodeOrder}
-            shown={shown}
-            defaultNode={config.default_node}
-            maxShown={config.max_shown_nodes}
-            addState={scanner.addState}
-            onShow={scanner.showNode}
-            onHide={scanner.hideNode}
-            onAdd={scanner.addNode}
-            onRemove={scanner.removeNode}
-          />
-          {shown.length === 0 && <p className="status">Select a sensor above to start scanning.</p>}
-          {/* Rows keep the order sensors were added in, so they don't jump around */}
-          {nodeOrder.filter((mac) => shown.includes(mac) && nodes[mac]).map((mac) => (
-            <section key={mac} className="node-row">
-              {nodes[mac].error ? (
-                <p className="status error">{nodes[mac].error}</p>
-              ) : (
-                <p className="status live">Live from sensor {mac}</p>
-              )}
-              <div className="panels">
-                {config.bands.map((band) => (
-                  <Panel
-                    key={band.key}
-                    band={band}
-                    spectrumKey={spectrumKey(mac, band.key)}
-                    info={nodes[mac].bands[band.key]}
-                    now={now}
-                    spectra={scanner.spectra}
-                    yRange={config.y_range_dBm}
-                    thresholdRange={config.threshold_range_dBm}
-                    onThresholdChange={(value) => scanner.setThreshold(mac, band.key, value)}
-                  />
-                ))}
-              </div>
-            </section>
+        <NodeSelector
+          nodes={nodes}
+          nodeOrder={nodeOrder}
+          primary={primary}
+          defaultNode={config.default_node}
+          maxNodes={config.max_nodes}
+          addState={scanner.addState}
+          onSelect={scanner.setPrimary}
+          onAdd={scanner.addNode}
+          onRemove={scanner.removeNode}
+        />
+      )}
+      {status}
+      {config && primaryNode && (
+        <div className="panels">
+          {config.bands.map((band) => (
+            <Panel
+              key={band.key}
+              band={band}
+              // Every sensor's trace, primary last so it's drawn on top
+              traces={[...nodeOrder.filter((mac) => mac !== primary), primary]
+                .filter((mac) => nodes[mac])
+                .map((mac) => ({ key: spectrumKey(mac, band.key), color: NODE_COLORS[nodes[mac].color] }))}
+              waterfallKey={spectrumKey(primary, band.key)}
+              waterfallColor={NODE_COLORS[primaryNode.color]}
+              shared={bands[band.key]}
+              primaryBand={primaryNode.bands[band.key]}
+              now={now}
+              spectra={scanner.spectra}
+              yRange={config.y_range_dBm}
+              thresholdRange={config.threshold_range_dBm}
+              onThresholdChange={(value) => scanner.setThreshold(primary, band.key, value)}
+            />
           ))}
-        </>
+        </div>
       )}
     </main>
   )
 }
 
-function Panel({ band, spectrumKey, info, now, spectra, yRange, thresholdRange, onThresholdChange }) {
-  const last = info?.lastDetected
+/**
+ * One radio. shared: count and last detection from any sensor (drives the
+ * glow, badge and antenna). primaryBand: the primary sensor's level and
+ * threshold (drives the knob).
+ */
+function Panel({ band, traces, waterfallKey, waterfallColor, shared, primaryBand, now, spectra, yRange, thresholdRange, onThresholdChange }) {
+  const last = shared?.lastDetected
   const active = last != null && now - last < DETECTION_GLOW_S
 
   // One antenna pulse per new detection (not for counts already there on page load)
-  const count = info?.count ?? 0
+  const count = shared?.count ?? 0
   const [pulseKey, setPulseKey] = useState(0)
   const previousCount = useRef(count)
   useEffect(() => {
@@ -106,15 +117,15 @@ function Panel({ band, spectrumKey, info, now, spectra, yRange, thresholdRange, 
         <span className="count-label">Times Detected</span>
         <Dial
           label={`${band.title} detection threshold`}
-          value={info.threshold}
-          level={info?.level}
+          value={primaryBand.threshold}
+          level={primaryBand.level}
           range={thresholdRange}
           onChange={onThresholdChange}
         />
       </div>
       <div className="screen">
-        <Spectrum band={band} spectrumKey={spectrumKey} spectra={spectra} yRange={yRange} active={active} />
-        <Waterfall band={band} spectrumKey={spectrumKey} spectra={spectra} />
+        <Spectrum band={band} traces={traces} spectra={spectra} yRange={yRange} active={active} />
+        <Waterfall band={band} spectrumKey={waterfallKey} color={waterfallColor} spectra={spectra} />
       </div>
       <VentSlots />
     </section>

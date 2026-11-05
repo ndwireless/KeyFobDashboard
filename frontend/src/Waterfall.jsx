@@ -8,19 +8,16 @@ const TICK_MS = 250 // a new row every tick, so all panels scroll at the same sp
 const STALE_S = 10
 const COLOR_RANGE_dBm = [-105, -55]
 
-// Signal strength -> color: dark screen, electric blue, neon cyan, white for the strongest
-const COLOR_STOPS = [
-  [0, [12, 14, 17]],
-  [0.35, [0, 42, 128]],
-  [0.6, [0, 102, 255]],
-  [0.85, [0, 255, 255]],
-  [1, [255, 255, 255]],
-]
-const COLOR_LUT = buildColorLUT(256)
-
-/** Scrolling waterfall: time runs downward, color is signal strength. Newest row on top. */
-export default function Waterfall({ band, spectrumKey, spectra }) {
+/**
+ * Scrolling waterfall of one sensor (the primary): time runs downward, color is
+ * signal strength in that sensor's color. Newest row on top. When the sensor
+ * changes, older rows keep scrolling in the previous color.
+ */
+export default function Waterfall({ band, spectrumKey, color, spectra }) {
   const canvasRef = useRef(null)
+  // Read inside the tick, so switching sensors doesn't clear the history
+  const source = useRef(null)
+  source.current = { spectrumKey, lut: colorLUT(color) }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -41,6 +38,7 @@ export default function Waterfall({ band, spectrumKey, spectra }) {
 
       // Newest row: strongest bin in each pixel column, from every fresh segment
       const columns = new Float32Array(width).fill(-Infinity)
+      const { spectrumKey, lut } = source.current
       const spectrum = spectra.current.get(spectrumKey)
       const now = Date.now() / 1000
       if (spectrum) {
@@ -52,7 +50,7 @@ export default function Waterfall({ band, spectrumKey, spectra }) {
       const [lo, hi] = COLOR_RANGE_dBm
       for (let c = 0; c < width; c++) {
         const t = columns[c] === -Infinity ? 0 : Math.min(1, Math.max(0, (columns[c] - lo) / (hi - lo)))
-        const rgb = COLOR_LUT[Math.round(t * (COLOR_LUT.length - 1))]
+        const rgb = lut[Math.round(t * (lut.length - 1))]
         for (let r = 0; r < row; r++) {
           const i = (r * width + c) * 4
           image.data[i] = rgb[0]
@@ -77,7 +75,7 @@ export default function Waterfall({ band, spectrumKey, spectra }) {
 
     const timer = setInterval(tick, TICK_MS)
     return () => clearInterval(timer)
-  }, [band, spectrumKey, spectra])
+  }, [band, spectra])
 
   return <canvas ref={canvasRef} className="waterfall" />
 }
@@ -102,14 +100,33 @@ function maxIntoColumns(columns, segment, fmin, fmax) {
   }
 }
 
-function buildColorLUT(size) {
+// Signal strength -> color: dark screen, dim sensor color, sensor color, its
+// bright variant, white for the strongest. Cached per color.
+const luts = new Map()
+function colorLUT({ base, bright }) {
+  const id = base + bright
+  if (!luts.has(id)) {
+    const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+    const stops = [
+      [0, [12, 14, 17]],
+      [0.35, rgb(base).map((v) => Math.round(v * 0.41))],
+      [0.6, rgb(base)],
+      [0.85, rgb(bright)],
+      [1, [255, 255, 255]],
+    ]
+    luts.set(id, buildColorLUT(stops, 256))
+  }
+  return luts.get(id)
+}
+
+function buildColorLUT(stops, size) {
   const lut = []
   for (let i = 0; i < size; i++) {
     const t = i / (size - 1)
     let k = 0
-    while (k < COLOR_STOPS.length - 2 && t > COLOR_STOPS[k + 1][0]) k++
-    const [t0, c0] = COLOR_STOPS[k]
-    const [t1, c1] = COLOR_STOPS[k + 1]
+    while (k < stops.length - 2 && t > stops[k + 1][0]) k++
+    const [t0, c0] = stops[k]
+    const [t1, c1] = stops[k + 1]
     const u = (t - t0) / (t1 - t0)
     lut.push(c0.map((v, j) => Math.round(v + (c1[j] - v) * u)))
   }

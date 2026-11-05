@@ -9,11 +9,12 @@ export const spectrumKey = (mac, bandKey) => `${mac}|${bandKey}`
 /**
  * Connects to server.py's /ws and keeps the dashboard's data.
  *
- * Nodes (counts, levels, thresholds, errors), which are shown, and status
- * live in React state (they change the text and dials on the page):
- *   nodes = {mac: {error, bands: {bandKey: {count, lastDetected, level, threshold}}}}
+ * Nodes, shared counts, the primary node and status live in React state
+ * (they change the text and dials on the page):
+ *   nodes = {mac: {color, error, bands: {bandKey: {level, threshold}}}}
  *   nodeOrder = [mac, ...]  // order added
- *   shown = [mac, ...]      // on screen, oldest first
+ *   bands = {bandKey: {count, lastDetected}}  // shared by all nodes
+ *   primary = mac  // whose threshold the knobs set and whose spectrum fills the waterfall
  * Spectrum data lives in `spectra`, a ref, so canvases can redraw on every
  * capture without re-rendering React:
  *   spectra.current.get(spectrumKey(mac, bandKey)) = {
@@ -27,7 +28,8 @@ export function useScanner() {
   const [config, setConfig] = useState(null)
   const [nodes, setNodes] = useState({})
   const [nodeOrder, setNodeOrder] = useState([])
-  const [shown, setShown] = useState([])
+  const [bands, setBands] = useState({})
+  const [primary, setPrimary] = useState(null)
   const [addState, setAddState] = useState({ pending: false, error: null })
   const [connected, setConnected] = useState(false)
   const socket = useRef(null)
@@ -60,9 +62,9 @@ export function useScanner() {
       for (const [bandKey, b] of Object.entries(snapshot.bands)) {
         spectra.current.set(spectrumKey(snapshot.mac, bandKey), { segments: new Map(), afterglow: [], version: 0 })
         b.segments.forEach((segment) => addCapture({ ...segment, node: snapshot.mac }))
-        bandStates[bandKey] = { count: b.count, lastDetected: b.last_detected, level: null, threshold: b.threshold }
+        bandStates[bandKey] = { level: b.level, threshold: b.threshold }
       }
-      return { error: snapshot.error, bands: bandStates }
+      return { color: snapshot.color, error: snapshot.error, bands: bandStates }
     }
 
     function updateBand(mac, bandKey, update) {
@@ -87,28 +89,32 @@ export function useScanner() {
           setConfig(message)
           setNodes(loaded)
           setNodeOrder(message.nodes.map((n) => n.mac))
-          setShown(message.shown)
+          setBands(
+            Object.fromEntries(
+              Object.entries(message.band_state).map(([key, b]) => [key, { count: b.count, lastDetected: b.last_detected }]),
+            ),
+          )
+          setPrimary(message.primary)
           setAddState({ pending: false, error: null })
         } else if (message.type === 'capture') {
           addCapture(message)
-          updateBand(message.node, message.band, (b) => ({
-            ...b,
-            count: message.count,
-            lastDetected: message.last_detected,
-            // BLE captures without an advertising channel have no level; keep the last one
-            level: message.level ?? b.level,
-          }))
+          // BLE captures without an advertising channel have no level; keep the last one
+          if (message.level != null) updateBand(message.node, message.band, (b) => ({ ...b, level: message.level }))
+          setBands((prev) => {
+            const b = prev[message.band]
+            if (b && b.count === message.count && b.lastDetected === message.last_detected) return prev
+            return { ...prev, [message.band]: { count: message.count, lastDetected: message.last_detected } }
+          })
         } else if (message.type === 'threshold') {
           updateBand(message.node, message.band, (b) => ({ ...b, threshold: message.value }))
         } else if (message.type === 'status') {
           setNodes((prev) => (prev[message.node] ? { ...prev, [message.node]: { ...prev[message.node], error: message.error } } : prev))
-        } else if (message.type === 'shown') {
-          setShown(message.shown)
+        } else if (message.type === 'primary') {
+          setPrimary(message.node)
         } else if (message.type === 'node_added') {
           const node = loadNode(message.node)
           setNodes((prev) => ({ ...prev, [message.node.mac]: node }))
           setNodeOrder((prev) => (prev.includes(message.node.mac) ? prev : [...prev, message.node.mac]))
-          setShown(message.shown)
           setAddState({ pending: false, error: null })
         } else if (message.type === 'add_failed') {
           setAddState({ pending: false, error: message.error })
@@ -121,7 +127,7 @@ export function useScanner() {
             return rest
           })
           setNodeOrder((prev) => prev.filter((mac) => mac !== message.node))
-          setShown(message.shown)
+          setPrimary(message.primary)
         }
       }
       ws.onclose = () => {
@@ -162,14 +168,14 @@ export function useScanner() {
     config,
     nodes,
     nodeOrder,
-    shown,
+    bands,
+    primary,
     connected,
     spectra,
     addState,
     setThreshold,
     addNode,
-    showNode: (mac) => send({ type: 'show', node: mac }),
-    hideNode: (mac) => send({ type: 'hide', node: mac }),
+    setPrimary: (mac) => send({ type: 'primary', node: mac }),
     removeNode: (mac) => send({ type: 'remove', node: mac }),
   }
 }
