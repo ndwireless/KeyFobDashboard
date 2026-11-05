@@ -6,7 +6,7 @@ const X_DIVS = 10
 const Y_DIVS = 8
 
 /** Analyzer-style spectrum screen: graticule, glowing live trace, afterglow, peak hold. */
-export default function Spectrum({ band, spectra, yRange, active }) {
+export default function Spectrum({ band, spectrumKey, spectra, yRange, active }) {
   const canvasRef = useRef(null)
   // Read inside the draw loop, so a detection doesn't restart the loop
   const activeRef = useRef(active)
@@ -43,7 +43,7 @@ export default function Spectrum({ band, spectra, yRange, active }) {
         ctx.fillRect(fx(lo), plot.y, fx(hi) - fx(lo), plot.h)
       }
 
-      const spectrum = spectra.current.get(band.key)
+      const spectrum = spectra.current.get(spectrumKey)
       if (spectrum) {
         ctx.save()
         ctx.beginPath()
@@ -95,7 +95,7 @@ export default function Spectrum({ band, spectra, yRange, active }) {
 
     draw()
     return () => cancelAnimationFrame(frame)
-  }, [band, spectra, yRange])
+  }, [band, spectrumKey, spectra, yRange])
 
   return <canvas ref={canvasRef} className="spectrum" />
 }

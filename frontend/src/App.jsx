@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import Antenna from './Antenna.jsx'
 import Dial from './Dial.jsx'
+import NodeSelector from './NodeSelector.jsx'
 import Spectrum from './Spectrum.jsx'
 import VentSlots from './VentSlots.jsx'
 import Waterfall from './Waterfall.jsx'
-import { useScanner } from './useScanner'
+import { spectrumKey, useScanner } from './useScanner'
 
 const DETECTION_GLOW_S = 2 // how long a panel stays lit after a detection
 
 export default function App() {
-  const { config, bands, thresholds, setThreshold, error, connected, spectra } = useScanner()
+  const scanner = useScanner()
+  const { config, nodes, nodeOrder, shown, connected } = scanner
 
   // Re-render a few times a second so "Last seen" and the glow time out
   const [now, setNow] = useState(Date.now() / 1000)
@@ -17,11 +19,6 @@ export default function App() {
     const timer = setInterval(() => setNow(Date.now() / 1000), 250)
     return () => clearInterval(timer)
   }, [])
-
-  let status
-  if (!connected) status = <p className="status">Connecting to server...</p>
-  else if (error) status = <p className="status error">{error}</p>
-  else status = <p className="status live">Live from sensor {config?.node}</p>
 
   return (
     <main>
@@ -32,29 +29,54 @@ export default function App() {
           <p className="subtitle">Real-time frequency spectrum analysis per wireless protocol.</p>
         </div>
       </header>
-      {status}
+      {!connected && <p className="status">Connecting to server...</p>}
       {config && (
-        <div className="panels">
-          {config.bands.map((band) => (
-            <Panel
-              key={band.key}
-              band={band}
-              info={bands[band.key]}
-              now={now}
-              spectra={spectra}
-              yRange={config.y_range_dBm}
-              threshold={thresholds[band.key]}
-              thresholdRange={config.threshold_range_dBm}
-              onThresholdChange={(value) => setThreshold(band.key, value)}
-            />
+        <>
+          <NodeSelector
+            nodes={nodes}
+            nodeOrder={nodeOrder}
+            shown={shown}
+            defaultNode={config.default_node}
+            maxShown={config.max_shown_nodes}
+            addState={scanner.addState}
+            onShow={scanner.showNode}
+            onHide={scanner.hideNode}
+            onAdd={scanner.addNode}
+            onRemove={scanner.removeNode}
+          />
+          {shown.length === 0 && <p className="status">Select a sensor above to start scanning.</p>}
+          {/* Rows keep the order sensors were added in, so they don't jump around */}
+          {nodeOrder.filter((mac) => shown.includes(mac) && nodes[mac]).map((mac) => (
+            <section key={mac} className="node-row">
+              {nodes[mac].error ? (
+                <p className="status error">{nodes[mac].error}</p>
+              ) : (
+                <p className="status live">Live from sensor {mac}</p>
+              )}
+              <div className="panels">
+                {config.bands.map((band) => (
+                  <Panel
+                    key={band.key}
+                    band={band}
+                    spectrumKey={spectrumKey(mac, band.key)}
+                    info={nodes[mac].bands[band.key]}
+                    now={now}
+                    spectra={scanner.spectra}
+                    yRange={config.y_range_dBm}
+                    thresholdRange={config.threshold_range_dBm}
+                    onThresholdChange={(value) => scanner.setThreshold(mac, band.key, value)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
-        </div>
+        </>
       )}
     </main>
   )
 }
 
-function Panel({ band, info, now, spectra, yRange, threshold, thresholdRange, onThresholdChange }) {
+function Panel({ band, spectrumKey, info, now, spectra, yRange, thresholdRange, onThresholdChange }) {
   const last = info?.lastDetected
   const active = last != null && now - last < DETECTION_GLOW_S
 
@@ -84,15 +106,15 @@ function Panel({ band, info, now, spectra, yRange, threshold, thresholdRange, on
         <span className="count-label">Times Detected</span>
         <Dial
           label={`${band.title} detection threshold`}
-          value={threshold}
+          value={info.threshold}
           level={info?.level}
           range={thresholdRange}
           onChange={onThresholdChange}
         />
       </div>
       <div className="screen">
-        <Spectrum band={band} spectra={spectra} yRange={yRange} active={active} />
-        <Waterfall band={band} spectra={spectra} />
+        <Spectrum band={band} spectrumKey={spectrumKey} spectra={spectra} yRange={yRange} active={active} />
+        <Waterfall band={band} spectrumKey={spectrumKey} spectra={spectra} />
       </div>
       <VentSlots />
     </section>

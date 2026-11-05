@@ -19,7 +19,7 @@ const COLOR_STOPS = [
 const COLOR_LUT = buildColorLUT(256)
 
 /** Scrolling waterfall: time runs downward, color is signal strength. Newest row on top. */
-export default function Waterfall({ band, spectra }) {
+export default function Waterfall({ band, spectrumKey, spectra }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function Waterfall({ band, spectra }) {
 
       // Newest row: strongest bin in each pixel column, from every fresh segment
       const columns = new Float32Array(width).fill(-Infinity)
-      const spectrum = spectra.current.get(band.key)
+      const spectrum = spectra.current.get(spectrumKey)
       const now = Date.now() / 1000
       if (spectrum) {
         for (const segment of spectrum.segments.values()) {
@@ -77,7 +77,7 @@ export default function Waterfall({ band, spectra }) {
 
     const timer = setInterval(tick, TICK_MS)
     return () => clearInterval(timer)
-  }, [band, spectra])
+  }, [band, spectrumKey, spectra])
 
   return <canvas ref={canvasRef} className="waterfall" />
 }

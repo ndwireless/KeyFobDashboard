@@ -95,6 +95,91 @@ h1 {
 .status.error { color: var(--error); }
 .status.error::before { background: var(--error); }
 
+/* Sensor selector: toggles for which nodes are on screen, plus an add field */
+.node-bar { margin-top: 28px; }
+.node-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.node-chip {
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  transition: border-color 0.2s, background 0.2s;
+}
+.node-chip.on { border-color: var(--electric-blue); background: rgba(0, 102, 255, 0.14); }
+.node-toggle,
+.node-remove,
+.node-add button,
+.node-add input { font: inherit; }
+.node-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-family: 'DejaVu Sans Mono', Menlo, monospace;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.node-chip.on .node-toggle { color: var(--white); }
+.node-remove {
+  padding: 4px 12px 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.node-remove:hover { color: var(--white); }
+.node-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #55585e;
+}
+.node-dot.live { background: var(--electric-blue); box-shadow: 0 0 8px var(--electric-blue); }
+.node-dot.error { background: var(--error); }
+.node-add { display: flex; gap: 8px; }
+.node-add input {
+  width: 180px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  background: var(--screen);
+  color: var(--white);
+  font-family: 'DejaVu Sans Mono', Menlo, monospace;
+  font-size: 0.9rem;
+}
+.node-add input::placeholder { color: #6b6f76; }
+.node-add input:focus { outline: none; border-color: var(--neon-cyan); }
+.node-add button {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--electric-blue);
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.node-add button:disabled { opacity: 0.45; cursor: default; }
+.node-toggle:focus-visible,
+.node-remove:focus-visible,
+.node-add button:focus-visible { outline: 2px solid var(--neon-cyan); outline-offset: 2px; }
+.node-hint { margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+.node-hint.error { color: var(--error); }
+
+.node-row + .node-row { margin-top: 56px; }
+
 .panels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

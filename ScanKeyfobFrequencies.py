@@ -1,6 +1,7 @@
 from spec0 import scan, sweep_beta
 import numpy as np
 
+# Default node; the React dashboard can add others
 node_mac_address = 'f4b898874967'
 gain = 23
 # Default detection threshold; the React dashboard can change it per band
@@ -41,19 +42,19 @@ def summarize(result, detect_ranges_MHz):
     return freqs / 1e6, to_dBm(result.data), level_dBm
 
 
-def scan_keyfob(band_name):
+def scan_keyfob(band_name, mac_address=node_mac_address):
     fmin, fmax = keyfob_bands[band_name]["range_MHz"]
-    result = scan(node_mac_address, freq=(fmin + fmax) / 2 * 1e6, gain=gain)
+    result = scan(mac_address, freq=(fmin + fmax) / 2 * 1e6, gain=gain)
     return summarize(result, [(fmin, fmax)])
 
 
-def sweep_ble():
+def sweep_ble(mac_address=node_mac_address):
     """
     sweep_beta over the BLE band with doBlock=False, so each 24 MHz capture
     can be shown (and keyfob scans slotted in) as soon as it arrives.
     """
     fmin, fmax = ble_range_MHz
-    return sweep_beta(node_mac_address, fmin * 1e6, fmax * 1e6, gain=gain, doBlock=False)
+    return sweep_beta(mac_address, fmin * 1e6, fmax * 1e6, gain=gain, doBlock=False)
 
 
 def summarize_ble(result):
